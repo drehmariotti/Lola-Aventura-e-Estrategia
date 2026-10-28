@@ -19,6 +19,7 @@ export function LolaGameApp({ onBackToMenu }: LolaGameAppProps) {
   const canvasMountRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<ThreeGameView | null>(null);
   const engineRef = useRef<GameEngine | null>(null);
+  const deathTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // App State
   const [currentLevelIndex, setCurrentLevelIndex] = useState(0);
@@ -33,6 +34,15 @@ export function LolaGameApp({ onBackToMenu }: LolaGameAppProps) {
   const [showInstructions, setShowInstructions] = useState(false);
   const [showLevelSelect, setShowLevelSelect] = useState(false);
   const [showRelicJournal, setShowRelicJournal] = useState(false);
+
+  // Cleanup death timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (deathTimeoutRef.current) {
+        clearTimeout(deathTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Persistent records & relics
   const [levelRecords, setLevelRecords] = useState<
@@ -59,11 +69,27 @@ export function LolaGameApp({ onBackToMenu }: LolaGameAppProps) {
     if (!engineRef.current) return;
     const eng = engineRef.current;
     setTurnCount(eng.turnCount);
-    setIsDead(eng.isPlayerDead);
-    setDeathReason(eng.deathReason);
     setHasWon(eng.hasWon);
     setPlayerFacing(eng.playerFacing);
     setValidMoves(eng.getValidMoves());
+
+    // 2-second delay before showing the ambush modal so the player sees the snake strike animation in 3D
+    if (eng.isPlayerDead) {
+      setDeathReason(eng.deathReason);
+      if (!deathTimeoutRef.current) {
+        deathTimeoutRef.current = setTimeout(() => {
+          setIsDead(true);
+          deathTimeoutRef.current = null;
+        }, 2000);
+      }
+    } else {
+      if (deathTimeoutRef.current) {
+        clearTimeout(deathTimeoutRef.current);
+        deathTimeoutRef.current = null;
+      }
+      setIsDead(false);
+      setDeathReason('');
+    }
 
     // Check newly collected relics
     eng.relics.forEach((r) => {
@@ -156,6 +182,12 @@ export function LolaGameApp({ onBackToMenu }: LolaGameAppProps) {
 
   // Restart level
   const handleRestart = useCallback(() => {
+    if (deathTimeoutRef.current) {
+      clearTimeout(deathTimeoutRef.current);
+      deathTimeoutRef.current = null;
+    }
+    setIsDead(false);
+    setDeathReason('');
     if (!engineRef.current || !viewRef.current) return;
     const level = LEVELS[currentLevelIndex];
     engineRef.current.initLevel(level);
@@ -198,6 +230,12 @@ export function LolaGameApp({ onBackToMenu }: LolaGameAppProps) {
 
   // Switch level when currentLevelIndex changes
   useEffect(() => {
+    if (deathTimeoutRef.current) {
+      clearTimeout(deathTimeoutRef.current);
+      deathTimeoutRef.current = null;
+    }
+    setIsDead(false);
+    setDeathReason('');
     if (!viewRef.current) return;
     const level = LEVELS[currentLevelIndex];
     const engine = new GameEngine(level);
