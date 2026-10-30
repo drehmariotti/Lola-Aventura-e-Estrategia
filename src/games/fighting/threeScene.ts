@@ -360,7 +360,7 @@ export class FightingThreeScene {
     leftCalfPivot.add(leftCalf);
 
     const leftFoot = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 0.22), accentMat);
-    leftFoot.position.set(0.04, -0.42, 0);
+    leftFoot.position.set(0, -0.42, 0.06);
     leftCalfPivot.add(leftFoot);
 
     // Right Leg
@@ -383,7 +383,7 @@ export class FightingThreeScene {
     rightCalfPivot.add(rightCalf);
 
     const rightFoot = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 0.22), accentMat);
-    rightFoot.position.set(0.04, -0.42, 0);
+    rightFoot.position.set(0, -0.42, 0.06);
     rightCalfPivot.add(rightFoot);
 
     // Initial scale and orientation
@@ -415,6 +415,42 @@ export class FightingThreeScene {
 
     this.p1Parts = this.createFighterMesh(p1Def, true);
     this.p2Parts = this.createFighterMesh(p2Def, false);
+  }
+
+  // Explicitly reset fighter transforms and poses at the start of a round
+  public resetFighterPoses() {
+    if (this.p1Parts) {
+      this.p1Parts.root.rotation.set(0, Math.PI / 2, 0);
+      this.p1Parts.root.position.set(-2.2, 0, 0);
+      this.p1Parts.hips.position.set(0, 0.95, 0);
+      this.p1Parts.hips.rotation.set(0, 0, 0);
+      this.p1Parts.torso.rotation.set(0, 0, 0);
+      this.p1Parts.head.rotation.set(0, 0, 0);
+      this.p1Parts.rightArmPivot.rotation.set(0, 0, 0);
+      this.p1Parts.rightForearmPivot.rotation.set(0, 0, 0);
+      this.p1Parts.leftArmPivot.rotation.set(0, 0, 0);
+      this.p1Parts.leftForearmPivot.rotation.set(0, 0, 0);
+      this.p1Parts.rightLegPivot.rotation.set(0, 0, 0);
+      this.p1Parts.rightCalfPivot.rotation.set(0, 0, 0);
+      this.p1Parts.leftLegPivot.rotation.set(0, 0, 0);
+      this.p1Parts.leftCalfPivot.rotation.set(0, 0, 0);
+    }
+    if (this.p2Parts) {
+      this.p2Parts.root.rotation.set(0, -Math.PI / 2, 0);
+      this.p2Parts.root.position.set(2.2, 0, 0);
+      this.p2Parts.hips.position.set(0, 0.95, 0);
+      this.p2Parts.hips.rotation.set(0, 0, 0);
+      this.p2Parts.torso.rotation.set(0, 0, 0);
+      this.p2Parts.head.rotation.set(0, 0, 0);
+      this.p2Parts.rightArmPivot.rotation.set(0, 0, 0);
+      this.p2Parts.rightForearmPivot.rotation.set(0, 0, 0);
+      this.p2Parts.leftArmPivot.rotation.set(0, 0, 0);
+      this.p2Parts.leftForearmPivot.rotation.set(0, 0, 0);
+      this.p2Parts.rightLegPivot.rotation.set(0, 0, 0);
+      this.p2Parts.rightCalfPivot.rotation.set(0, 0, 0);
+      this.p2Parts.leftLegPivot.rotation.set(0, 0, 0);
+      this.p2Parts.leftCalfPivot.rotation.set(0, 0, 0);
+    }
   }
 
   // Spawn visual hit sparks
@@ -450,6 +486,11 @@ export class FightingThreeScene {
     const root = parts.root;
     root.position.set(f.x, f.y, f.z);
 
+    // CRITICAL: Reset root rotation X and Z every frame!
+    // This guarantees that fallen fighters (knockdown/defeat) will properly stand upright on round reset!
+    root.rotation.x = 0;
+    root.rotation.z = 0;
+
     // Orientation: face the opponent
     const targetRotY = f.facing === 1 ? Math.PI / 2 : -Math.PI / 2;
     root.rotation.y = targetRotY;
@@ -471,164 +512,279 @@ export class FightingThreeScene {
     parts.rightCalfPivot.rotation.set(0, 0, 0);
 
     const animProgress = f.animDuration > 0 ? Math.min(1, f.animTimer / f.animDuration) : 0;
-    const t = Math.sin(animProgress * Math.PI); // Smooth peak at 0.5
+
+    // Non-linear attack kinetic curves for snappy martial arts impact
+    // Fast explosive snap to apex at 0.35, brief impact hang, snappy recoil
+    let attackCurve = 0;
+    if (animProgress < 0.35) {
+      attackCurve = Math.sin((animProgress / 0.35) * (Math.PI / 2));
+    } else {
+      attackCurve = Math.cos(((animProgress - 0.35) / 0.65) * (Math.PI / 2));
+    }
+    const t = attackCurve;
 
     switch (f.animState) {
       case 'idle': {
-        // Tekken bouncing fighting stance
-        const bounce = Math.sin(elapsed * 7) * 0.04;
+        // Tekken 3 / Mortal Kombat dynamic breathing & bouncing fighting stance
+        const bounce = Math.sin(elapsed * 6.5) * 0.035;
+        const breath = Math.sin(elapsed * 3.2) * 0.03;
         parts.hips.position.y = 0.95 + bounce;
 
-        // Boxing / Karate Guard
-        parts.torso.rotation.y = 0.3; // Slight 3/4 turn
-        parts.rightArmPivot.rotation.x = -1.1; // Lead guard
-        parts.rightForearmPivot.rotation.x = -1.2;
-        parts.leftArmPivot.rotation.x = -0.9; // Back guard
-        parts.leftForearmPivot.rotation.x = -1.3;
+        // Torso 3/4 turn towards opponent with chest breathing
+        parts.torso.rotation.y = 0.38 + breath * 0.5;
+        parts.torso.rotation.x = -0.05 + breath;
 
-        parts.leftLegPivot.rotation.x = -0.2;
-        parts.rightLegPivot.rotation.x = 0.2;
+        // Lead Guard (Right Arm) protecting chin & ribs
+        parts.rightArmPivot.rotation.x = -1.18 + bounce * 0.5;
+        parts.rightArmPivot.rotation.z = -0.15;
+        parts.rightForearmPivot.rotation.x = -1.35;
+
+        // Rear Guard (Left Arm) protecting jaw
+        parts.leftArmPivot.rotation.x = -1.02 + bounce * 0.4;
+        parts.leftArmPivot.rotation.z = 0.12;
+        parts.leftForearmPivot.rotation.x = -1.45;
+
+        // Staggered stance: lead foot forward (+Z), rear foot back (-Z)
+        parts.rightLegPivot.rotation.x = -0.22;
+        parts.rightCalfPivot.rotation.x = 0.18;
+        parts.leftLegPivot.rotation.x = 0.18;
+        parts.leftCalfPivot.rotation.x = 0.22;
         break;
       }
 
       case 'walk_fwd': {
-        const walk = Math.sin(elapsed * 12);
-        parts.rightLegPivot.rotation.x = walk * 0.6;
-        parts.leftLegPivot.rotation.x = -walk * 0.6;
-        parts.rightArmPivot.rotation.x = -1.0 + walk * 0.3;
-        parts.leftArmPivot.rotation.x = -0.9 - walk * 0.3;
+        // Aggressive forward stepping in fight stance
+        const walk = Math.sin(elapsed * 10);
+        parts.hips.position.y = 0.95 + Math.abs(walk) * 0.03;
+        parts.torso.rotation.x = 0.12; // Leaning in to close distance
+        parts.torso.rotation.y = 0.35 + walk * 0.15;
+
+        parts.rightLegPivot.rotation.x = -walk * 0.55;
+        parts.rightCalfPivot.rotation.x = Math.max(0, walk * 0.5);
+        parts.leftLegPivot.rotation.x = walk * 0.55;
+        parts.leftCalfPivot.rotation.x = Math.max(0, -walk * 0.5);
+
+        parts.rightArmPivot.rotation.x = -1.2 - walk * 0.25;
+        parts.leftArmPivot.rotation.x = -1.0 + walk * 0.25;
         break;
       }
 
       case 'walk_bwd': {
-        const walk = Math.sin(elapsed * 10);
-        parts.rightLegPivot.rotation.x = -walk * 0.5;
-        parts.leftLegPivot.rotation.x = walk * 0.5;
-        parts.torso.rotation.z = -0.1; // Leaning back defensively
-        parts.rightArmPivot.rotation.x = -1.2;
-        parts.leftArmPivot.rotation.x = -1.2;
+        // Defensive backward spacing with high guard
+        const walk = Math.sin(elapsed * 9);
+        parts.hips.position.y = 0.95 + Math.abs(walk) * 0.025;
+        parts.torso.rotation.x = -0.1; // Leaning back defensively
+        parts.torso.rotation.y = 0.4;
+
+        parts.rightLegPivot.rotation.x = walk * 0.45;
+        parts.leftLegPivot.rotation.x = -walk * 0.45;
+
+        // Tight high block guard
+        parts.rightArmPivot.rotation.x = -1.35;
+        parts.rightForearmPivot.rotation.x = -1.5;
+        parts.leftArmPivot.rotation.x = -1.3;
+        parts.leftForearmPivot.rotation.x = -1.5;
         break;
       }
 
       case 'crouch': {
-        // Low ducking guard
-        parts.hips.position.y = 0.55;
-        parts.leftLegPivot.rotation.x = -1.2;
-        parts.rightLegPivot.rotation.x = -1.2;
-        parts.leftCalfPivot.rotation.x = 1.3;
-        parts.rightCalfPivot.rotation.x = 1.3;
-        parts.torso.rotation.x = 0.4;
-        parts.rightArmPivot.rotation.x = -1.4;
-        parts.leftArmPivot.rotation.x = -1.4;
+        // Tekken low ducking guard - evades high punches & high kicks
+        parts.hips.position.y = 0.52;
+        parts.torso.rotation.x = 0.45;
+        parts.torso.rotation.y = 0.2;
+
+        parts.leftLegPivot.rotation.x = -1.3;
+        parts.leftCalfPivot.rotation.x = 1.45;
+        parts.rightLegPivot.rotation.x = -1.3;
+        parts.rightCalfPivot.rotation.x = 1.45;
+
+        // Tight compact low guard
+        parts.rightArmPivot.rotation.x = -1.5;
+        parts.rightForearmPivot.rotation.x = -1.4;
+        parts.leftArmPivot.rotation.x = -1.5;
+        parts.leftForearmPivot.rotation.x = -1.4;
         break;
       }
 
       case 'jump': {
-        // Tuck knees in air
-        parts.leftLegPivot.rotation.x = -0.7;
-        parts.rightLegPivot.rotation.x = -0.7;
-        parts.leftCalfPivot.rotation.x = 1.0;
-        parts.rightCalfPivot.rotation.x = 1.0;
-        parts.rightArmPivot.rotation.x = -1.6;
-        parts.leftArmPivot.rotation.x = -1.6;
+        // Dynamic martial arts leap
+        parts.torso.rotation.x = 0.2;
+        parts.leftLegPivot.rotation.x = -0.85;
+        parts.leftCalfPivot.rotation.x = 1.25;
+        parts.rightLegPivot.rotation.x = -0.85;
+        parts.rightCalfPivot.rotation.x = 1.25;
+
+        parts.rightArmPivot.rotation.x = -1.7;
+        parts.leftArmPivot.rotation.x = -1.7;
         break;
       }
 
       case 'punch_light': {
-        // Fast Left Jab
-        parts.torso.rotation.y = 0.5 * t;
-        parts.leftArmPivot.rotation.x = -Math.PI / 2 * t;
-        parts.leftForearmPivot.rotation.x = 0; // Fully straight
-        parts.rightArmPivot.rotation.x = -1.2; // Guard stays up
+        // Lead Snap Jab (Tekken 1-punch)
+        // Kinetic chain: lead hip steps in, shoulder drives, elbow snaps straight into opponent's jaw (+Z)
+        parts.hips.position.z = 0.12 * t;
+        parts.torso.rotation.y = 0.45 * t;
+        parts.torso.rotation.x = 0.18 * t;
+
+        // Lead Arm explodes straight out horizontally into opponent
+        parts.rightArmPivot.rotation.x = -Math.PI / 2.05 * t;
+        parts.rightArmPivot.rotation.z = -0.12 * t;
+        parts.rightForearmPivot.rotation.x = 0; // Fully locked extension on impact
+
+        // Rear Arm (Left) glued to jaw in tight guard
+        parts.leftArmPivot.rotation.x = -1.35;
+        parts.leftArmPivot.rotation.z = 0.2;
+        parts.leftForearmPivot.rotation.x = -1.5;
+
+        // Supporting legs
+        parts.rightLegPivot.rotation.x = -0.25 * t;
+        parts.leftLegPivot.rotation.x = 0.25 * t;
         break;
       }
 
       case 'punch_heavy': {
-        // Devastating Right Straight / Hook
-        parts.torso.rotation.y = -0.8 * t;
-        parts.torso.rotation.x = 0.2 * t;
-        parts.rightArmPivot.rotation.x = -Math.PI / 1.8 * t;
-        parts.rightForearmPivot.rotation.x = -0.1;
-        parts.leftArmPivot.rotation.x = -1.1;
-        parts.rightLegPivot.rotation.x = 0.4 * t;
+        // Devastating Rear Cross / Power Hook (Tekken Paul / Bryan style)
+        // Rear foot pivots, hips twist with full bodyweight torque, rear shoulder unloads (+Z)
+        parts.hips.position.z = 0.22 * t;
+        parts.hips.rotation.y = -0.55 * t;
+        parts.torso.rotation.y = -0.85 * t;
+        parts.torso.rotation.x = 0.28 * t;
+
+        // Rear Arm uncoils heavy overhand punch straight into opponent
+        parts.leftArmPivot.rotation.x = -Math.PI / 1.88 * t;
+        parts.leftArmPivot.rotation.y = 0.42 * t;
+        parts.leftArmPivot.rotation.z = -0.32 * t;
+        parts.leftForearmPivot.rotation.x = -0.15 * t;
+
+        // Lead Arm pulls back into tight defensive tuck
+        parts.rightArmPivot.rotation.x = -0.75;
+        parts.rightForearmPivot.rotation.x = -1.55;
+
+        // Rear foot pivot
+        parts.leftLegPivot.rotation.x = 0.35 * t;
+        parts.leftCalfPivot.rotation.y = 0.35 * t;
         break;
       }
 
       case 'kick_low': {
-        // Quick Low Shin / Knee Kick
-        parts.rightLegPivot.rotation.x = 0.8 * t;
-        parts.rightCalfPivot.rotation.x = -0.3 * t;
-        parts.torso.rotation.z = -0.2 * t;
+        // Muay Thai / Karate Low Shin Kick (strikes opponent's lead leg forward +Z)
+        parts.torso.rotation.z = -0.25 * t;
+        parts.torso.rotation.x = 0.15 * t;
+        parts.hips.rotation.y = -0.35 * t;
+        parts.hips.position.z = 0.15 * t;
+
+        // Kicking leg drives forward towards opponent (+Z)
+        parts.rightLegPivot.rotation.x = -1.25 * t;
+        parts.rightLegPivot.rotation.z = -0.15 * t;
+        parts.rightCalfPivot.rotation.x = -0.15 * t;
+
+        // Supporting leg absorbs weight
+        parts.leftLegPivot.rotation.x = 0.25 * t;
+        parts.leftCalfPivot.rotation.x = 0.35 * t;
+
+        // Arms hold high cross guard
+        parts.rightArmPivot.rotation.x = -1.35;
+        parts.leftArmPivot.rotation.x = -1.35;
         break;
       }
 
       case 'kick_high': {
-        // High Roundhouse Kick to Head
-        parts.torso.rotation.z = -0.6 * t;
-        parts.torso.rotation.y = -0.4 * t;
-        parts.rightLegPivot.rotation.x = 1.6 * t;
-        parts.rightLegPivot.rotation.z = 0.4 * t;
-        parts.rightCalfPivot.rotation.x = 0;
+        // Tekken High Roundhouse / Axe Kick (aimed straight at opponent's head forward +Z)
+        parts.torso.rotation.z = 0.35 * t;
+        parts.torso.rotation.y = -0.55 * t;
+        parts.torso.rotation.x = -0.22 * t;
+        parts.hips.rotation.y = -0.45 * t;
+        parts.hips.position.z = 0.2 * t;
+
+        // High leg extension straight towards opponent's head (+Z)
+        parts.rightLegPivot.rotation.x = -1.95 * t;
+        parts.rightLegPivot.rotation.z = -0.25 * t;
+        parts.rightCalfPivot.rotation.x = -0.1 * t;
+
+        // Supporting leg
+        parts.leftLegPivot.rotation.x = 0.3 * t;
+        parts.leftCalfPivot.rotation.x = 0.35 * t;
+
+        // Counterbalance arms
+        parts.rightArmPivot.rotation.x = -1.35;
+        parts.leftArmPivot.rotation.x = -0.75;
+        parts.leftArmPivot.rotation.z = -0.45 * t;
         break;
       }
 
       case 'sweep': {
-        // Leg Sweep (Rasteira): low drop and full rotational sweep
-        parts.hips.position.y = 0.4;
-        parts.torso.rotation.x = 0.6;
+        // Rasteira (Tekken Eddy Gordo / Paul low sweep tripping opponent forward +Z)
+        parts.hips.position.y = 0.32;
+        parts.torso.rotation.x = 0.65;
         parts.torso.rotation.y = animProgress * Math.PI * 1.5;
-        parts.leftLegPivot.rotation.x = -1.3;
-        parts.leftCalfPivot.rotation.x = 1.4;
-        parts.rightLegPivot.rotation.x = 0.9;
-        parts.rightLegPivot.rotation.z = 0.6;
+
+        // Supporting leg crouched deeply
+        parts.leftLegPivot.rotation.x = -1.45;
+        parts.leftCalfPivot.rotation.x = 1.55;
+
+        // Sweeping leg sweeps forward low across the floor into +Z
+        parts.rightLegPivot.rotation.x = -1.25;
+        parts.rightLegPivot.rotation.z = -0.65;
+        parts.rightCalfPivot.rotation.x = -0.15;
+
+        // Hand plants down for stability
+        parts.leftArmPivot.rotation.x = 0.85;
+        parts.leftForearmPivot.rotation.x = -0.45;
         break;
       }
 
       case 'spinning_kick': {
-        // Chute Giratório (360° spin kick)
+        // Chute Giratório (Tekken Hwoarang / Jin 360° spinning hook kick)
         const spinAngle = animProgress * Math.PI * 2;
-        root.rotation.y = (f.facing === 1 ? Math.PI / 2 : -Math.PI / 2) + spinAngle;
-        parts.hips.position.y = 0.95 + Math.sin(animProgress * Math.PI) * 0.25; // Slight jump
-        parts.rightLegPivot.rotation.x = 1.4 * t;
-        parts.rightLegPivot.rotation.z = 0.3 * t;
-        parts.torso.rotation.z = -0.4 * t;
+        root.rotation.y = targetRotY + spinAngle;
+        parts.hips.position.y = 0.95 + Math.sin(animProgress * Math.PI) * 0.42;
+
+        // High spinning heel whip forward into opponent (+Z)
+        parts.rightLegPivot.rotation.x = -1.82 * t;
+        parts.rightLegPivot.rotation.z = -0.25 * t;
+        parts.rightCalfPivot.rotation.x = -0.15 * t;
+        parts.torso.rotation.z = 0.35 * t;
+        parts.torso.rotation.x = 0.15;
         break;
       }
 
       case 'grab': {
-        // Lunging grab reach
-        parts.torso.rotation.x = 0.3 * t;
-        parts.rightArmPivot.rotation.x = -Math.PI / 2 * t;
-        parts.leftArmPivot.rotation.x = -Math.PI / 2 * t;
+        // Tekken Grapple & Slam (Otoshi / Shoulder throw)
+        parts.torso.rotation.x = 0.35 * t;
+        parts.torso.rotation.y = 0.65 * t;
+        parts.rightArmPivot.rotation.x = -Math.PI / 1.95 * t;
+        parts.leftArmPivot.rotation.x = -Math.PI / 1.95 * t;
         parts.rightForearmPivot.rotation.x = 0;
         parts.leftForearmPivot.rotation.x = 0;
         break;
       }
 
       case 'grabbed': {
-        // Being lifted and slammed
-        parts.hips.position.y = 0.95 + t * 0.8;
-        parts.torso.rotation.x = -t * 1.2;
-        parts.leftLegPivot.rotation.x = 0.5;
-        parts.rightLegPivot.rotation.x = 0.5;
+        // Defender lifted in air, inverted, and slammed to canvas
+        parts.hips.position.y = 0.95 + t * 1.1;
+        root.rotation.x = t * 1.4;
+        parts.torso.rotation.x = -t * 0.8;
+        parts.leftLegPivot.rotation.x = 0.6;
+        parts.rightLegPivot.rotation.x = 0.6;
         break;
       }
 
       case 'hit_light': {
-        // Head / torso snapback
-        parts.torso.rotation.x = -0.35 * t;
-        parts.head.rotation.x = -0.4 * t;
-        parts.rightArmPivot.rotation.x = -0.6;
-        parts.leftArmPivot.rotation.x = -0.6;
+        // Quick head & shoulder snapback from jab impact
+        parts.torso.rotation.x = -0.38 * t;
+        parts.head.rotation.x = -0.45 * t;
+        parts.rightArmPivot.rotation.x = -0.55;
+        parts.leftArmPivot.rotation.x = -0.55;
         break;
       }
 
       case 'hit_heavy': {
-        // Big stagger back
-        parts.torso.rotation.x = -0.7 * t;
-        parts.head.rotation.x = -0.7 * t;
-        parts.hips.position.y = 0.85;
-        parts.leftLegPivot.rotation.x = -0.4;
+        // Visceral stagger & spine curve from heavy cross / spinning kick impact
+        parts.torso.rotation.x = -0.78 * t;
+        parts.head.rotation.x = -0.75 * t;
+        parts.hips.position.y = 0.82;
+        parts.leftLegPivot.rotation.x = -0.52 * t;
+        parts.rightLegPivot.rotation.x = 0.25 * t;
         break;
       }
 

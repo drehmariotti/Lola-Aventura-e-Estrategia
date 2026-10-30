@@ -33,6 +33,8 @@ export class FighterEngine {
 
   // OnHit callback for spawning hit sparks & camera shake
   public onHitEffect?: (x: number, y: number, z: number, isHeavy: boolean) => void;
+  // OnRoundReset callback to notify 3D scene to reset mesh transforms
+  public onRoundReset?: () => void;
 
   private p1InputBuffer: Set<string> = new Set();
   private cpuActionTimer: number = 0;
@@ -101,6 +103,8 @@ export class FighterEngine {
     this.p1.isGrounded = true;
     this.p1.velocityY = 0;
     this.p1.hasHitThisAttack = false;
+    this.p1.isInvulnerable = false;
+    this.p1.comboCount = 0;
 
     this.p2.x = 2.2;
     this.p2.y = 0;
@@ -112,11 +116,20 @@ export class FighterEngine {
     this.p2.isGrounded = true;
     this.p2.velocityY = 0;
     this.p2.hasHitThisAttack = false;
+    this.p2.isInvulnerable = false;
+    this.p2.comboCount = 0;
+
+    this.cpuActionTimer = 0;
+    this.cpuNextActionTime = 0.5;
 
     this.match.roundTimer = 60;
     this.match.bannerText = `ROUND ${this.match.round}`;
     this.match.bannerSubtext = 'FIGHT!';
     this.match.bannerTimer = 2.0;
+
+    if (this.onRoundReset) {
+      this.onRoundReset();
+    }
 
     fightingAudio.playAnnouncer('round');
     setTimeout(() => fightingAudio.playAnnouncer('fight'), 900);
@@ -137,6 +150,9 @@ export class FighterEngine {
       attacker.animState === 'crouch';
 
     if (!canAct) return;
+
+    // Ensure attacker strictly faces towards the opponent before unleashing strike
+    attacker.facing = attacker.x < target.x ? 1 : -1;
 
     const dist = Math.abs(attacker.x - target.x);
 

@@ -102,6 +102,9 @@ export function FightingGame({ onBackToMenu }: FightingGameProps) {
     engine.onHitEffect = (x, y, z, isHeavy) => {
       sceneRef.current?.spawnHitSparks(x, y, z, isHeavy);
     };
+    engine.onRoundReset = () => {
+      sceneRef.current?.resetFighterPoses();
+    };
     engineRef.current = engine;
     sceneRef.current.initFighters(CHARACTERS[playerCharId], CHARACTERS[opponentCharId]);
   }, [playerCharId]);
@@ -120,6 +123,9 @@ export function FightingGame({ onBackToMenu }: FightingGameProps) {
 
     engine.onHitEffect = (x, y, z, isHeavy) => {
       scene.spawnHitSparks(x, y, z, isHeavy);
+    };
+    engine.onRoundReset = () => {
+      scene.resetFighterPoses();
     };
 
     let animId = 0;
@@ -177,14 +183,16 @@ export function FightingGame({ onBackToMenu }: FightingGameProps) {
 
       // Check whether player is holding "backward" (away from opponent)
       const isHoldingBack =
-        (p1.facing === 1 && (key === 'arrowleft' || code === 'keya')) ||
-        (p1.facing === -1 && (key === 'arrowright' || code === 'keyd'));
+        (p1.facing === 1 && (activeKeysRef.current.has('arrowleft') || activeKeysRef.current.has('keya') || key === 'arrowleft' || code === 'keya')) ||
+        (p1.facing === -1 && (activeKeysRef.current.has('arrowright') || activeKeysRef.current.has('keyd') || key === 'arrowright' || code === 'keyd'));
 
       // Check Grab combination: punch + kick pressed together or key 'c' / 'g'
       const isPunchKey = key === 'a' || code === 'keyj' || key === 's' || code === 'keyk';
       const isKickKey = key === 'z' || code === 'keyu' || key === 'x' || code === 'keyi';
+      const isHoldingPunch = activeKeysRef.current.has('a') || activeKeysRef.current.has('keyj') || activeKeysRef.current.has('s') || activeKeysRef.current.has('keyk');
+      const isHoldingKick = activeKeysRef.current.has('z') || activeKeysRef.current.has('keyu') || activeKeysRef.current.has('x') || activeKeysRef.current.has('keyi');
 
-      if (key === 'c' || key === 'g' || (isPunchKey && activeKeysRef.current.has('z')) || (isKickKey && activeKeysRef.current.has('a'))) {
+      if (key === 'c' || key === 'g' || (isPunchKey && isHoldingKick) || (isKickKey && isHoldingPunch)) {
         // "Ao apertar chute e soco perto do oponente deve ser possível agarra-lo para jogar no chão."
         eng.handlePlayerInput('grab');
         return;
@@ -254,7 +262,6 @@ export function FightingGame({ onBackToMenu }: FightingGameProps) {
         p1={p1State}
         p2={p2State}
         match={matchState}
-        onCommand={handleCommand}
         onRestartMatch={handleRestartMatch}
         onBackToSelect={() => setGameMode('select')}
         onBackToPortal={onBackToMenu}

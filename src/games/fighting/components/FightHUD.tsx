@@ -1,13 +1,12 @@
 import React from 'react';
 import { FighterState } from '../types';
-import { FightMatchState, InputCommand } from '../fighterEngine';
-import { ArrowLeft, RotateCcw, Swords, Flame, Sparkles } from 'lucide-react';
+import { FightMatchState } from '../fighterEngine';
+import { ArrowLeft, RotateCcw, Swords, Keyboard } from 'lucide-react';
 
 interface FightHUDProps {
   p1: FighterState;
   p2: FighterState;
   match: FightMatchState;
-  onCommand: (cmd: InputCommand) => void;
   onRestartMatch: () => void;
   onBackToSelect: () => void;
   onBackToPortal: () => void;
@@ -17,7 +16,6 @@ export function FightHUD({
   p1,
   p2,
   match,
-  onCommand,
   onRestartMatch,
   onBackToSelect,
   onBackToPortal,
@@ -46,7 +44,7 @@ export function FightHUD({
               title="Trocar Lutador"
             >
               <Swords className="w-3.5 h-3.5" />
-              <span>Trocar Lutador</span>
+              <span>Trocar Personagem</span>
             </button>
           </div>
 
@@ -60,7 +58,7 @@ export function FightHUD({
           </button>
         </div>
 
-        {/* Tekken 3 Style Health Bars */}
+        {/* Tekken Style Health Bars */}
         <div className="flex items-center justify-between gap-3 sm:gap-6 bg-stone-950/70 p-2 sm:p-3 rounded-2xl border border-stone-800/80 shadow-2xl backdrop-blur-sm">
           {/* Player 1 Health Bar (Left) */}
           <div className="flex-1 flex flex-col items-start gap-1">
@@ -178,126 +176,48 @@ export function FightHUD({
         )}
       </div>
 
-      {/* Bottom Virtual Arcade Controls (Touch & Keyboard Reference) */}
-      <footer className="pointer-events-auto w-full max-w-5xl mx-auto flex flex-col sm:flex-row items-end sm:items-center justify-between gap-4">
-        {/* Left: Directional D-Pad (Touch & Keyboard) */}
-        <div className="flex flex-col items-center p-2 rounded-2xl bg-stone-950/70 border border-stone-800/80 shadow-xl backdrop-blur-sm">
-          <div className="flex justify-center">
-            <button
-              onPointerDown={() => onCommand('jump')}
-              className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-stone-900 hover:bg-stone-800 active:bg-amber-500 active:text-stone-950 border border-stone-700 flex flex-col items-center justify-center font-black text-xs transition-all cursor-pointer shadow"
-              title="Pular [Seta Cima / W]"
-            >
-              <span>▲</span>
-              <span className="text-[9px] text-stone-400">Pular</span>
-            </button>
-          </div>
-          <div className="flex gap-2 my-1">
-            <button
-              onPointerDown={() => onCommand(p1.facing === 1 ? 'move_bwd' : 'move_fwd')}
-              className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-stone-900 hover:bg-stone-800 active:bg-amber-500 active:text-stone-950 border border-stone-700 flex flex-col items-center justify-center font-black text-xs transition-all cursor-pointer shadow"
-              title="Trás [Seta Esquerda / A]"
-            >
-              <span>◄</span>
-              <span className="text-[9px] text-stone-400">Trás</span>
-            </button>
-            <button
-              onPointerDown={() => onCommand('crouch')}
-              className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-stone-900 hover:bg-stone-800 active:bg-amber-500 active:text-stone-950 border border-stone-700 flex flex-col items-center justify-center font-black text-xs transition-all cursor-pointer shadow"
-              title="Agachar [Seta Baixo / S]"
-            >
-              <span>▼</span>
-              <span className="text-[9px] text-stone-400">Agachar</span>
-            </button>
-            <button
-              onPointerDown={() => onCommand(p1.facing === 1 ? 'move_fwd' : 'move_bwd')}
-              className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-stone-900 hover:bg-stone-800 active:bg-amber-500 active:text-stone-950 border border-stone-700 flex flex-col items-center justify-center font-black text-xs transition-all cursor-pointer shadow"
-              title="Frente [Seta Direita / D]"
-            >
-              <span>►</span>
-              <span className="text-[9px] text-stone-400">Frente</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Center: Command Shortcuts Guide */}
-        <div className="hidden md:flex flex-col items-center gap-1 text-[11px] font-mono text-stone-400 bg-stone-950/70 p-2.5 rounded-2xl border border-stone-800">
-          <div className="flex items-center gap-3 font-semibold text-stone-300">
-            <span>◄ + Chute B: <strong className="text-amber-400">Rasteira</strong></span>
-            <span>•</span>
-            <span>◄ + Chute A: <strong className="text-amber-400">Chute Giratório</strong></span>
-            <span>•</span>
-            <span>Soco + Chute: <strong className="text-amber-400">Agarrão</strong></span>
-          </div>
-          <span className="text-stone-500 text-[10px]">Setas para mover • A/S = Socos • Z/X = Chutes</span>
-        </div>
-
-        {/* Right: Attack Buttons Grid (2 Punches, 2 Kicks, Special Moves) */}
-        <div className="flex flex-col gap-2 p-2 rounded-2xl bg-stone-950/70 border border-stone-800/80 shadow-xl backdrop-blur-sm">
-          {/* Main 4 Attack Buttons */}
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              onPointerDown={() => onCommand('punch_light')}
-              className="px-3 py-2.5 rounded-xl bg-gradient-to-r from-blue-700 to-blue-600 hover:from-blue-600 hover:to-blue-500 active:scale-95 text-stone-100 font-black text-xs uppercase transition-all cursor-pointer shadow border border-blue-500/40 flex flex-col items-center"
-              title="Soco Rápido [A / J]"
-            >
-              <span>Soco Rápido</span>
-              <span className="text-[9px] opacity-80">[A]</span>
-            </button>
-
-            <button
-              onPointerDown={() => onCommand('punch_heavy')}
-              className="px-3 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 active:scale-95 text-stone-950 font-black text-xs uppercase transition-all cursor-pointer shadow border border-amber-400/50 flex flex-col items-center"
-              title="Soco Forte [S / K]"
-            >
-              <span>Soco Forte</span>
-              <span className="text-[9px] opacity-80">[S]</span>
-            </button>
-
-            <button
-              onPointerDown={() => onCommand('kick_low')}
-              className="px-3 py-2.5 rounded-xl bg-gradient-to-r from-emerald-700 to-emerald-600 hover:from-emerald-600 hover:to-emerald-500 active:scale-95 text-stone-100 font-black text-xs uppercase transition-all cursor-pointer shadow border border-emerald-500/40 flex flex-col items-center"
-              title="Chute Baixo [Z / U]"
-            >
-              <span>Chute Baixo</span>
-              <span className="text-[9px] opacity-80">[Z]</span>
-            </button>
-
-            <button
-              onPointerDown={() => onCommand('kick_high')}
-              className="px-3 py-2.5 rounded-xl bg-gradient-to-r from-rose-700 to-rose-600 hover:from-rose-600 hover:to-rose-500 active:scale-95 text-stone-100 font-black text-xs uppercase transition-all cursor-pointer shadow border border-rose-500/40 flex flex-col items-center"
-              title="Chute Alto [X / I]"
-            >
-              <span>Chute Alto</span>
-              <span className="text-[9px] opacity-80">[X]</span>
-            </button>
+      {/* Bottom Corner Note: Keyboard Controls Legend */}
+      <footer className="pointer-events-auto w-full flex justify-end">
+        <div className="max-w-xs sm:max-w-sm rounded-2xl bg-stone-950/85 border border-stone-800/90 p-3 sm:p-3.5 shadow-2xl backdrop-blur-md text-[11px] font-sans text-stone-300 flex flex-col gap-1.5">
+          <div className="flex items-center gap-1.5 text-amber-400 font-black tracking-wider uppercase text-[11px] pb-1 border-b border-stone-800">
+            <Keyboard className="w-3.5 h-3.5" />
+            <span>Controles do Teclado</span>
           </div>
 
-          {/* Quick Special Combos: Rasteira, Chute Giratório & Agarrão */}
-          <div className="grid grid-cols-3 gap-1.5 pt-1 border-t border-stone-800">
-            <button
-              onPointerDown={() => onCommand('sweep')}
-              className="px-2 py-1.5 rounded-lg bg-stone-900 hover:bg-amber-500 hover:text-stone-950 text-amber-300 font-bold text-[10px] uppercase transition-all cursor-pointer border border-stone-700/80 active:scale-95 text-center"
-              title="Rasteira (Trás + Chute Baixo)"
-            >
-              Rasteira
-            </button>
+          <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[10px] sm:text-[11px]">
+            <div>
+              <span className="text-stone-500">Mover:</span> <span className="text-stone-100 font-bold">◄ / ►</span>
+            </div>
+            <div>
+              <span className="text-stone-500">Pular:</span> <span className="text-stone-100 font-bold">▲</span>
+            </div>
+            <div>
+              <span className="text-stone-500">Agachar:</span> <span className="text-stone-100 font-bold">▼</span>
+            </div>
+            <div>
+              <span className="text-stone-500">Soco Rápido:</span> <span className="text-amber-300 font-bold">[A]</span>
+            </div>
+            <div>
+              <span className="text-stone-500">Soco Forte:</span> <span className="text-amber-300 font-bold">[S]</span>
+            </div>
+            <div>
+              <span className="text-stone-500">Chute Baixo:</span> <span className="text-emerald-300 font-bold">[Z]</span>
+            </div>
+            <div>
+              <span className="text-stone-500">Chute Alto:</span> <span className="text-emerald-300 font-bold">[X]</span>
+            </div>
+          </div>
 
-            <button
-              onPointerDown={() => onCommand('spinning_kick')}
-              className="px-2 py-1.5 rounded-lg bg-stone-900 hover:bg-rose-500 hover:text-stone-100 text-rose-300 font-bold text-[10px] uppercase transition-all cursor-pointer border border-stone-700/80 active:scale-95 text-center"
-              title="Giratório (Trás + Chute Alto)"
-            >
-              Giratório
-            </button>
-
-            <button
-              onPointerDown={() => onCommand('grab')}
-              className="px-2 py-1.5 rounded-lg bg-stone-900 hover:bg-purple-500 hover:text-stone-100 text-purple-300 font-bold text-[10px] uppercase transition-all cursor-pointer border border-stone-700/80 active:scale-95 text-center"
-              title="Agarrão (Perto do Oponente)"
-            >
-              Agarrão
-            </button>
+          <div className="pt-1 border-t border-stone-800/80 flex flex-col gap-0.5 text-[10px]">
+            <div>
+              <span className="text-amber-400 font-bold">Rasteira:</span> <span className="text-stone-200">Trás + [Z]</span>
+            </div>
+            <div>
+              <span className="text-rose-400 font-bold">Chute Giratório:</span> <span className="text-stone-200">Trás + [X]</span>
+            </div>
+            <div>
+              <span className="text-purple-400 font-bold">Agarrão:</span> <span className="text-stone-200">[A] + [Z] ou [C]</span>
+            </div>
           </div>
         </div>
       </footer>
