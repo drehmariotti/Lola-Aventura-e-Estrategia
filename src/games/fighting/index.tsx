@@ -1,101 +1,264 @@
-import React from 'react';
-import { ArrowLeft, Swords, Shield, Zap, Flame, Sparkles } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { CharacterSelect } from './components/CharacterSelect';
+import { FightHUD } from './components/FightHUD';
+import { FightingThreeScene } from './threeScene';
+import { FighterEngine, InputCommand } from './fighterEngine';
+import { CHARACTERS } from './characters';
+import { FighterId, FighterState } from './types';
 
 interface FightingGameProps {
   onBackToMenu: () => void;
 }
 
 export function FightingGame({ onBackToMenu }: FightingGameProps) {
+  const [gameMode, setGameMode] = useState<'select' | 'fighting'>('select');
+  const [playerCharId, setPlayerCharId] = useState<FighterId>('marcus');
+
+  const canvasMountRef = useRef<HTMLDivElement>(null);
+  const sceneRef = useRef<FightingThreeScene | null>(null);
+  const engineRef = useRef<FighterEngine | null>(null);
+
+  // Active keyboard keys state
+  const activeKeysRef = useRef<Set<string>>(new Set());
+
+  // React state copies for HUD re-renders
+  const [p1State, setP1State] = useState<FighterState>(() => {
+    const def = CHARACTERS.marcus;
+    return {
+      id: def.id,
+      def,
+      isPlayer: true,
+      x: -2.2,
+      y: 0,
+      z: 0,
+      facing: 1,
+      health: 100,
+      maxHealth: 100,
+      roundsWon: 0,
+      animState: 'idle',
+      animTimer: 0,
+      animDuration: 0,
+      isGrounded: true,
+      velocityY: 0,
+      isBlocking: false,
+      isInvulnerable: false,
+      hasHitThisAttack: false,
+      comboCount: 0,
+      lastHitTime: 0,
+    };
+  });
+
+  const [p2State, setP2State] = useState<FighterState>(() => {
+    const def = CHARACTERS.elena;
+    return {
+      id: def.id,
+      def,
+      isPlayer: false,
+      x: 2.2,
+      y: 0,
+      z: 0,
+      facing: -1,
+      health: 100,
+      maxHealth: 100,
+      roundsWon: 0,
+      animState: 'idle',
+      animTimer: 0,
+      animDuration: 0,
+      isGrounded: true,
+      velocityY: 0,
+      isBlocking: false,
+      isInvulnerable: false,
+      hasHitThisAttack: false,
+      comboCount: 0,
+      lastHitTime: 0,
+    };
+  });
+
+  const [matchState, setMatchState] = useState({
+    round: 1,
+    maxRounds: 3,
+    roundTimer: 60,
+    matchOver: false,
+    winner: null as FighterId | 'draw' | null,
+    bannerText: 'ROUND 1' as string | null,
+    bannerSubtext: 'FIGHT!' as string | null,
+    bannerTimer: 2.0,
+  });
+
+  const handleStartFight = (selectedPlayerChar: FighterId) => {
+    setPlayerCharId(selectedPlayerChar);
+    setGameMode('fighting');
+  };
+
+  const handleCommand = useCallback((cmd: InputCommand) => {
+    if (!engineRef.current) return;
+    engineRef.current.handlePlayerInput(cmd);
+  }, []);
+
+  const handleRestartMatch = useCallback(() => {
+    if (!engineRef.current || !sceneRef.current) return;
+    const opponentCharId: FighterId = playerCharId === 'marcus' ? 'elena' : 'marcus';
+    const engine = new FighterEngine(playerCharId, opponentCharId);
+    engine.onHitEffect = (x, y, z, isHeavy) => {
+      sceneRef.current?.spawnHitSparks(x, y, z, isHeavy);
+    };
+    engineRef.current = engine;
+    sceneRef.current.initFighters(CHARACTERS[playerCharId], CHARACTERS[opponentCharId]);
+  }, [playerCharId]);
+
+  // Mount 3D Scene when in 'fighting' mode
+  useEffect(() => {
+    if (gameMode !== 'fighting' || !canvasMountRef.current) return;
+
+    const opponentCharId: FighterId = playerCharId === 'marcus' ? 'elena' : 'marcus';
+    const engine = new FighterEngine(playerCharId, opponentCharId);
+    engineRef.current = engine;
+
+    const scene = new FightingThreeScene(canvasMountRef.current);
+    sceneRef.current = scene;
+    scene.initFighters(CHARACTERS[playerCharId], CHARACTERS[opponentCharId]);
+
+    engine.onHitEffect = (x, y, z, isHeavy) => {
+      scene.spawnHitSparks(x, y, z, isHeavy);
+    };
+
+    let animId = 0;
+    let lastTime = performance.now();
+
+    const loop = (now: number) => {
+      animId = requestAnimationFrame(loop);
+      const delta = Math.min((now - lastTime) / 1000, 0.05);
+      lastTime = now;
+
+      engine.update(delta, activeKeysRef.current);
+      scene.update(engine.p1, engine.p2);
+
+      // Sync state to React
+      setP1State({ ...engine.p1 });
+      setP2State({ ...engine.p2 });
+      setMatchState({ ...engine.match });
+    };
+
+    animId = requestAnimationFrame(loop);
+
+    return () => {
+      cancelAnimationFrame(animId);
+      scene.dispose();
+      sceneRef.current = null;
+      engineRef.current = null;
+    };
+  }, [gameMode, playerCharId]);
+
+  // Keyboard controls handler
+  useEffect(() => {
+    if (gameMode !== 'fighting') return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const key = e.key.toLowerCase();
+      const code = e.code.toLowerCase();
+
+      // Prevent scroll on arrows or space
+      if (
+        key === 'arrowup' ||
+        key === 'arrowdown' ||
+        key === 'arrowleft' ||
+        key === 'arrowright' ||
+        key === ' '
+      ) {
+        e.preventDefault();
+      }
+
+      activeKeysRef.current.add(key);
+      activeKeysRef.current.add(code);
+
+      if (!engineRef.current) return;
+      const eng = engineRef.current;
+      const p1 = eng.p1;
+
+      // Check whether player is holding "backward" (away from opponent)
+      const isHoldingBack =
+        (p1.facing === 1 && (key === 'arrowleft' || code === 'keya')) ||
+        (p1.facing === -1 && (key === 'arrowright' || code === 'keyd'));
+
+      // Check Grab combination: punch + kick pressed together or key 'c' / 'g'
+      const isPunchKey = key === 'a' || code === 'keyj' || key === 's' || code === 'keyk';
+      const isKickKey = key === 'z' || code === 'keyu' || key === 'x' || code === 'keyi';
+
+      if (key === 'c' || key === 'g' || (isPunchKey && activeKeysRef.current.has('z')) || (isKickKey && activeKeysRef.current.has('a'))) {
+        // "Ao apertar chute e soco perto do oponente deve ser possível agarra-lo para jogar no chão."
+        eng.handlePlayerInput('grab');
+        return;
+      }
+
+      // Attack inputs:
+      if (key === 'z' || code === 'keyu') {
+        // Chute Baixo (Left Kick)
+        if (isHoldingBack) {
+          // "Ao apertar para trás e chute baixo o personagem deve dar uma rasteira capaz de derrubar o oponente."
+          eng.handlePlayerInput('sweep');
+        } else {
+          eng.handlePlayerInput('kick_low');
+        }
+      } else if (key === 'x' || code === 'keyi') {
+        // Chute Alto (Right Kick)
+        if (isHoldingBack) {
+          // "Ao apertar para trás e chute alto ele deve dar um chute giratório."
+          eng.handlePlayerInput('spinning_kick');
+        } else {
+          eng.handlePlayerInput('kick_high');
+        }
+      } else if (key === 'a' || code === 'keyj') {
+        // Soco Rápido (Left Punch)
+        eng.handlePlayerInput('punch_light');
+      } else if (key === 's' || code === 'keyk') {
+        // Soco Forte (Right Punch)
+        eng.handlePlayerInput('punch_heavy');
+      } else if (key === 'arrowup' || code === 'keyw') {
+        eng.handlePlayerInput('jump');
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      const key = e.key.toLowerCase();
+      const code = e.code.toLowerCase();
+      activeKeysRef.current.delete(key);
+      activeKeysRef.current.delete(code);
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      activeKeysRef.current.clear();
+    };
+  }, [gameMode]);
+
+  if (gameMode === 'select') {
+    return (
+      <CharacterSelect
+        onSelectCharacter={handleStartFight}
+        onBackToMenu={onBackToMenu}
+      />
+    );
+  }
+
   return (
-    <div className="relative w-screen h-screen overflow-y-auto bg-stone-950 text-stone-100 font-sans select-none">
-      {/* Background Ambience */}
-      <div className="absolute inset-0 bg-gradient-to-br from-purple-950/20 via-stone-950 to-stone-900 pointer-events-none" />
-      <div className="absolute -top-40 -left-40 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-rose-500/10 rounded-full blur-3xl pointer-events-none" />
+    <div className="relative w-screen h-screen overflow-hidden bg-stone-950 font-sans select-none outline-none">
+      {/* 3D WebGL Canvas Viewport */}
+      <div ref={canvasMountRef} className="absolute inset-0 w-full h-full" />
 
-      {/* Header */}
-      <header className="relative z-10 p-4 sm:p-6 flex items-center justify-between border-b border-stone-800/80 bg-stone-950/60 backdrop-blur-md">
-        <button
-          onClick={onBackToMenu}
-          className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-stone-900 hover:bg-stone-800 border border-stone-700/80 text-purple-300 text-xs sm:text-sm font-semibold transition-all cursor-pointer shadow-md active:scale-95"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Voltar ao Menu Principal</span>
-        </button>
-
-        <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-purple-500/15 text-purple-400 border border-purple-500/30">
-            <span className="w-2 h-2 rounded-full bg-purple-400 animate-pulse" />
-            Em Desenvolvimento
-          </span>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="relative z-10 max-w-4xl mx-auto p-6 sm:p-10 flex flex-col items-center text-center">
-        <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-purple-500/20 to-rose-500/20 border border-purple-500/40 flex items-center justify-center text-purple-400 mb-6 shadow-xl shadow-purple-500/10">
-          <Swords className="w-10 h-10" />
-        </div>
-
-        <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-stone-100 uppercase">
-          Shadow Impact: <span className="text-purple-400">Brawler Arena</span>
-        </h1>
-        <p className="mt-3 text-stone-400 text-sm sm:text-base max-w-xl leading-relaxed">
-          Subprojeto de luta arcade com golpes em cadeia, contra-ataques precisos, barras de especial e duelos de arena.
-        </p>
-
-        {/* Feature Cards Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 w-full mt-10 text-left">
-          <div className="p-5 rounded-2xl bg-stone-900/80 border border-stone-800 hover:border-purple-500/40 transition-all shadow-md">
-            <div className="w-9 h-9 rounded-xl bg-purple-500/15 flex items-center justify-center text-purple-400 mb-3">
-              <Zap className="w-5 h-5" />
-            </div>
-            <h3 className="font-bold text-sm text-stone-200">Sistema de Combos</h3>
-            <p className="text-xs text-stone-400 mt-1 leading-relaxed">
-              Sequências fluidas de socos, chutes aéreos, quebras de defesa e especiais cinemáticos.
-            </p>
-          </div>
-
-          <div className="p-5 rounded-2xl bg-stone-900/80 border border-stone-800 hover:border-purple-500/40 transition-all shadow-md">
-            <div className="w-9 h-9 rounded-xl bg-rose-500/15 flex items-center justify-center text-rose-400 mb-3">
-              <Shield className="w-5 h-5" />
-            </div>
-            <h3 className="font-bold text-sm text-stone-200">Parry & Esquivas</h3>
-            <p className="text-xs text-stone-400 mt-1 leading-relaxed">
-              Temporização precisa de bloqueios e esquivas para punir aberturas do oponente.
-            </p>
-          </div>
-
-          <div className="p-5 rounded-2xl bg-stone-900/80 border border-stone-800 hover:border-purple-500/40 transition-all shadow-md">
-            <div className="w-9 h-9 rounded-xl bg-amber-500/15 flex items-center justify-center text-amber-400 mb-3">
-              <Flame className="w-5 h-5" />
-            </div>
-            <h3 className="font-bold text-sm text-stone-200">Arenas Dinâmicas</h3>
-            <p className="text-xs text-stone-400 mt-1 leading-relaxed">
-              Subpasta estruturada em <code className="text-purple-300 font-mono text-[10px]">/src/games/fighting</code> pronta para início.
-            </p>
-          </div>
-        </div>
-
-        {/* Development Callout */}
-        <div className="mt-10 p-6 rounded-2xl bg-stone-900/50 border border-stone-800/80 w-full flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3 text-left">
-            <div className="p-2.5 rounded-xl bg-purple-500/10 text-purple-400">
-              <Sparkles className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-xs font-semibold text-stone-300">Diretório Reservado</p>
-              <p className="text-xs text-stone-500">Módulos de hitboxes, animações de combate e máquina de estados dos lutadores.</p>
-            </div>
-          </div>
-          <button
-            onClick={onBackToMenu}
-            className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-stone-100 text-xs font-bold transition-all shadow-lg shadow-purple-600/20 cursor-pointer active:scale-95"
-          >
-            Explorar Outros Jogos
-          </button>
-        </div>
-      </main>
+      {/* Fight HUD Overlay */}
+      <FightHUD
+        p1={p1State}
+        p2={p2State}
+        match={matchState}
+        onCommand={handleCommand}
+        onRestartMatch={handleRestartMatch}
+        onBackToSelect={() => setGameMode('select')}
+        onBackToPortal={onBackToMenu}
+      />
     </div>
   );
 }
